@@ -69,7 +69,11 @@ toStr (NMat (name,mat)) = unlines [ name ++ " " ++ t | t <- tos ]
 
 -- ここを広げていく
 doCalc :: Option -> [NMat] -> IO ()
-doCalc opt (a:b:ms) = putStr $ toStr (matMultiply a b)
+doCalc (Term Mul lhs rhs) ms = putStr $ toStr $ matMultiply (getMat lhs ms) (getMat rhs ms)
+
+getMat :: String -> [NMat] -> NMat
+getMat name ms = head $ filter ( f name ) ms
+                 where f name (NMat (n,_)) = (name == n)
 
 matMultiply :: NMat -> NMat -> NMat
 matMultiply (NMat x) (NMat y) = NMat ((fst x) ++ "*" ++ (fst y), LA.multiply (snd x) (snd y))
@@ -92,8 +96,12 @@ getCluster lns = [fst d] ++ getCluster (snd d)
                             key = head $ words $ head lns
                             compKey a b = a == (head $ words b)
 
-data Option = Mul String String |
-              Error String deriving Show
+data Option = Term Op String String
+            | Mat (Maybe NMat)
+            | Error String
+
+data Mat = Maybe NMat
+data Op = Mul
 
 setOpt :: String -> Option
 setOpt str = case parse parseOption "" str of
@@ -104,4 +112,4 @@ parseOption :: Parser Option
 parseOption = do a <- many1 letter
                  char '*'
                  b <- many1 letter
-                 return $ Mul a b
+                 return $ Term Mul a b
