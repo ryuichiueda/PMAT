@@ -35,11 +35,11 @@ THE SOFTWARE.
 showUsage :: IO ()
 showUsage = do hPutStr stderr
 		("Usage    : pmat <opt> <file>\n" ++ 
-		"Tue Jul  2 16:40:21 JST 2013\n")
+		"Wed Jul  3 16:30:49 JST 2013\n")
 
 version :: IO ()
 version = do hPutStr stderr
-		("version 0.001")
+		("version 0.0011")
 
 main :: IO ()
 main = do
@@ -69,7 +69,9 @@ toStr (NMat (name,mat)) = unlines [ name ++ " " ++ t | t <- tos ]
 
 -- ここを広げていく
 doCalc :: Option -> [NMat] -> IO ()
-doCalc (Term Mul lhs rhs) ms = putStr $ toStr $ matMultiply (getMat lhs ms) (getMat rhs ms)
+doCalc (Term Mul lhs rhs) ms = doCalc (Mat m) ms
+                               where m = Just ( matMultiply (getMat lhs ms) (getMat rhs ms) )
+doCalc (Mat (Just m)) _ = putStr $ toStr m
 
 getMat :: String -> [NMat] -> NMat
 getMat name ms = head $ filter ( f name ) ms
