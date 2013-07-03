@@ -2,6 +2,7 @@ import System.Environment
 import System.IO
 import Text.ParserCombinators.Parsec
 import Control.Monad
+import Numeric.LinearAlgebra as LA
 
 {--
 pmat
@@ -55,13 +56,41 @@ readData :: String -> IO String
 readData "-" = getContents
 readData f   = readFile f
 
+data NMat = NMat (String,Matrix Double) deriving Show
+
 mainProc :: String -> String -> IO ()
-mainProc opt cs = doCalc (setOpt opt) (setMat cs)
+mainProc opt cs = do putStr cs
+                     doCalc (setOpt opt) (setMatrices cs)
 
-doCalc :: Option -> String -> IO ()
-doCalc = undefined
+toStr :: NMat -> String
+toStr (NMat (name,mat)) = unlines [ name ++ " " ++ t | t <- tos ]
+                          where lns = LA.toLists mat
+                                tos = [ unwords [ show d | d <- ln ] | ln <- lns ] 
 
-setMat :: String -> Matrices
+-- ここを広げていく
+doCalc :: Option -> [NMat] -> IO ()
+doCalc opt (a:b:ms) = putStr $ toStr (matMultiply a b)
+
+matMultiply :: NMat -> NMat -> NMat
+matMultiply (NMat x) (NMat y) = NMat ((fst x) ++ "*" ++ (fst y), LA.multiply (snd x) (snd y))
+
+setMatrices :: String -> [NMat]
+setMatrices cs = [ setMatrix m | m <- (getCluster $ lines cs) ]
+
+setMatrix :: [String] -> NMat
+setMatrix lns =  NMat (k,val)
+                where k = head (words $ head lns)
+                      val = (row><col) (concatMap toNums lns)
+                      toNums str = [ read n | n <- ( drop 1 $ words str) ]
+                      row = length lns
+                      col = (length $ words $ head lns) - 1
+
+getCluster :: [String] -> [[String]]
+getCluster [] = []
+getCluster lns = [fst d] ++ getCluster (snd d)
+                      where d = span (compKey key ) lns
+                            key = head $ words $ head lns
+                            compKey a b = a == (head $ words b)
 
 data Option = Mul String String |
               Error String deriving Show
