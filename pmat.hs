@@ -35,11 +35,11 @@ THE SOFTWARE.
 showUsage :: IO ()
 showUsage = do hPutStr stderr
 		("Usage    : pmat <opt> <file>\n" ++ 
-		"Wed Jul  3 16:30:49 JST 2013\n")
+		"Wed Jul  3 19:21:27 JST 2013\n")
 
 version :: IO ()
 version = do hPutStr stderr
-		("version 0.0011")
+		("version 0.0012")
 
 main :: IO ()
 main = do
