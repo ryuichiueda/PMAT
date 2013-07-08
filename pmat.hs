@@ -35,11 +35,11 @@ THE SOFTWARE.
 showUsage :: IO ()
 showUsage = do hPutStr stderr
 		("Usage    : pmat <opt> <file>\n" ++ 
-		"Wed Jul  3 19:21:27 JST 2013\n")
+		"Mon Jul  8 18:25:44 JST 2013\n")
 
 version :: IO ()
 version = do hPutStr stderr
-		("version 0.0012")
+		("version 0.0013")
 
 main :: IO ()
 main = do
@@ -72,10 +72,11 @@ data Option = Equation String Calc
 data Calc = SingleTerm Term
             | Mat (Maybe NMat)
 
-data Term = Term Op String String
+data Term = Term Op1 String String
+            | SingleMat String
 
 data Mat = Maybe NMat
-data Op = Mul
+data Op1 = Mul
 
 --------------------------
 -- execution and output --
@@ -89,8 +90,11 @@ doCalc name (SingleTerm t) ms = doCalcTerm name t ms
 doCalc ""   (Mat (Just m)) _ = putStr $ toStr m
 doCalc name (Mat (Just m)) _ = putStr $ toStr $ renameMat name m
 
+doCalcTerm :: String -> Term -> [NMat] -> IO ()
 doCalcTerm name (Term Mul lhs rhs) ms = doCalc name (Mat m) ms
-                               where m = Just ( matMul (getMat lhs ms) (getMat rhs ms) )
+                                        where m = Just ( matMul (getMat lhs ms) (getMat rhs ms) )
+doCalcTerm name (SingleMat s) ms     = doCalc name (Mat m) ms
+                                       where m = Just (getMat s ms)
 
 renameMat :: String -> NMat -> NMat
 renameMat new (NMat (n,m)) = NMat (new,m)
@@ -153,7 +157,11 @@ equation = do a <- many1 letter
               b <- calc
               return $ Equation a (SingleTerm b)
 
-calc = do a <- many1 letter
+singlemat = many1 letter >>= return . SingleMat
+
+term = do a <- many1 letter
           char '*'
           b <- many1 letter
           return $ Term Mul a b
+
+calc = try(term) <|> singlemat

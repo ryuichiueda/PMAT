@@ -54,6 +54,31 @@ ${com} "A*B" - > $tmp-ans
 diff $tmp-ans $tmp-out
 ERROR_CHECK "TEST1.3 error"
 
+###########################################
+#TEST2: simple copy of a matrix
+
+cat << FIN > $tmp-in
+A 1 2 3
+A 1 2 3
+B -1 2 3.0
+B 1 -2 3.1
+B 1 2 -3.2
+FIN
+
+cat << FIN > $tmp-out
+A 1 2 3
+A 1 2 3
+B -1 2 3.0
+B 1 -2 3.1
+B 1 2 -3.2
+C 1.0 2.0 3.0
+C 1.0 2.0 3.0
+FIN
+
+${com} "C=A" $tmp-in > $tmp-ans
+diff $tmp-ans $tmp-out
+ERROR_CHECK "TEST2.1 error"
+
 rm -f $tmp-*
 echo "${com}" OK
 exit 0
