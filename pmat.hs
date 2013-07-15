@@ -2,7 +2,7 @@ import System.Environment
 import System.IO
 import Text.ParserCombinators.Parsec
 import Control.Monad
-import Numeric.LinearAlgebra as LA
+import Numeric.LinearAlgebra
 
 {--
 pmat
@@ -35,11 +35,11 @@ THE SOFTWARE.
 showUsage :: IO ()
 showUsage = do hPutStr stderr
 		("Usage    : pmat <opt> <file>\n" ++ 
-		"Mon Jul  8 18:25:44 JST 2013\n")
+		"Mon Jul 15 10:26:06 JST 2013\n")
 
 version :: IO ()
 version = do hPutStr stderr
-		("version 0.0013")
+		("version 0.0014")
 
 main :: IO ()
 main = do
@@ -73,6 +73,7 @@ data Calc = SingleTerm Term
             | Mat (Maybe NMat)
 
 data Term = Term Op1 String String
+            | NTerm Op1 Double String
             | SingleMat String
 
 data Mat = Maybe NMat
@@ -93,6 +94,8 @@ doCalc name (Mat (Just m)) _ = putStr $ toStr $ renameMat name m
 doCalcTerm :: String -> Term -> [NMat] -> IO ()
 doCalcTerm name (Term Mul lhs rhs) ms = doCalc name (Mat m) ms
                                         where m = Just ( matMul (getMat lhs ms) (getMat rhs ms) )
+doCalcTerm name (NTerm Mul lhs rhs) ms = doCalc name (Mat m) ms
+                                         where m = Just ( matNMul lhs (getMat rhs ms) )
 doCalcTerm name (SingleMat s) ms     = doCalc name (Mat m) ms
                                        where m = Just (getMat s ms)
 
@@ -109,11 +112,23 @@ getMat nm ms = head $ filter ( f nm ) ms
                  where f nm (NMat (n,_)) = (nm == n)
 
 matMul :: NMat -> NMat -> NMat
-matMul (NMat x) (NMat y) = NMat ((fst x) ++ "*" ++ (fst y), LA.multiply (snd x) (snd y))
+matMul (NMat x) (NMat y) = NMat ((fst x) ++ "*" ++ (fst y),  (snd x) <> (snd y))
+
+matNMul :: Double -> NMat -> NMat
+matNMul d (NMat y) = NMat (nm, m)
+                       where nm = (show d) ++ "*" ++ (fst y)
+                             m =  nMultiply d (snd y) 
+
+-- I can't use `*` for double-Matrix operation though I can it on ghci
+nMultiply :: Double -> Matrix Double -> Matrix Double
+nMultiply d m = ((r><r) arr) <> m
+                where r = rows m
+                      arr = [ f x d | x <- [0..(r*r-1)]] 
+                      f n d = if (n `mod` r) == ( n `div` r) then d else 0.0
 
 toStr :: NMat -> String
 toStr (NMat (name,mat)) = unlines [ name ++ " " ++ t | t <- tos ]
-                          where lns = LA.toLists mat
+                          where lns = toLists mat
                                 tos = [ unwords [ show d | d <- ln ] | ln <- lns ] 
 
 ---------------------
@@ -164,4 +179,22 @@ term = do a <- many1 letter
           b <- many1 letter
           return $ Term Mul a b
 
-calc = try(term) <|> singlemat
+parseDouble = do x <- many1 digit
+                 char '.'
+                 y <- many1 digit
+                 return $ read (x++"."++y)
+
+parseInt = do x <- many1 digit
+              return $ (read x::Double)
+
+nterm = do a <- try(parseDouble) <|> parseInt
+           char '*'
+           b <- many1 letter
+           return $ NTerm Mul a b
+
+termn = do b <- many1 letter
+           char '*'
+           a <- try(parseDouble) <|> parseInt
+           return $ NTerm Mul a b
+
+calc = try(nterm) <|> try(termn) <|> try(term) <|> singlemat
