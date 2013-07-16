@@ -35,11 +35,11 @@ THE SOFTWARE.
 showUsage :: IO ()
 showUsage = do hPutStr stderr
 		("Usage    : pmat <opt> <file>\n" ++ 
-		"Mon Jul 15 10:26:06 JST 2013\n")
+		"Tue Jul 16 21:21:55 JST 2013\n")
 
 version :: IO ()
 version = do hPutStr stderr
-		("version 0.0014")
+		("version 0.0015")
 
 main :: IO ()
 main = do
@@ -70,11 +70,12 @@ data Option = Equation String Calc
             | Error String
 
 data Calc = SingleTerm Term
-            | Mat (Maybe NMat)
+            | Mat NMat
 
 data Term = Term Op1 String String
             | NTerm Op1 Double String
             | SingleMat String
+--            | LTerm Op1 Term String
 
 data Mat = Maybe NMat
 data Op1 = Mul
@@ -88,16 +89,18 @@ mainProc' (Equation name calc) ms = doCalc name calc ms
 
 doCalc :: String -> Calc -> [NMat] -> IO ()
 doCalc name (SingleTerm t) ms = doCalcTerm name t ms
-doCalc ""   (Mat (Just m)) _ = putStr $ toStr m
-doCalc name (Mat (Just m)) _ = putStr $ toStr $ renameMat name m
+doCalc ""   (Mat m) _ = putStr $ toStr m
+doCalc name (Mat m) _ = putStr $ toStr $ renameMat name m
 
 doCalcTerm :: String -> Term -> [NMat] -> IO ()
 doCalcTerm name (Term Mul lhs rhs) ms = doCalc name (Mat m) ms
-                                        where m = Just ( matMul (getMat lhs ms) (getMat rhs ms) )
+                                        where m = matMul (getMat lhs ms) (getMat rhs ms) 
 doCalcTerm name (NTerm Mul lhs rhs) ms = doCalc name (Mat m) ms
-                                         where m = Just ( matNMul lhs (getMat rhs ms) )
+                                         where m = matNMul lhs (getMat rhs ms) 
 doCalcTerm name (SingleMat s) ms     = doCalc name (Mat m) ms
-                                       where m = Just (getMat s ms)
+                                       where m = getMat s ms
+--doCalcTerm name (LTerm Mul lhs rhs) ms = doCalc name (Mat m) ms
+--                                         where m = matNMul lhs (getMat rhs ms) 
 
 renameMat :: String -> NMat -> NMat
 renameMat new (NMat (n,m)) = NMat (new,m)
