@@ -72,10 +72,14 @@ data Option = Equation String Calc
 data Calc = SingleTerm Term
             | Mat NMat
 
-data Term = Term Op1 String String
-            | NTerm Op1 Double String
-            | SingleMat String
---            | LTerm Op1 Term String
+data OpSet = OpSetMat (Op1,String)
+           | OpSetNum (Op1,Double)
+
+data SingleMat = SingleMat String
+               | EvaledMat NMat
+
+data Term = LongTerm SingleMat [OpSet]
+          | LongTermN Double [OpSet]
 
 data Mat = Maybe NMat
 data Op1 = Mul
@@ -93,14 +97,21 @@ doCalc ""   (Mat m) _ = putStr $ toStr m
 doCalc name (Mat m) _ = putStr $ toStr $ renameMat name m
 
 doCalcTerm :: String -> Term -> [NMat] -> IO ()
-doCalcTerm name (Term Mul lhs rhs) ms = doCalc name (Mat m) ms
-                                        where m = matMul (getMat lhs ms) (getMat rhs ms) 
-doCalcTerm name (NTerm Mul lhs rhs) ms = doCalc name (Mat m) ms
-                                         where m = matNMul lhs (getMat rhs ms) 
-doCalcTerm name (SingleMat s) ms     = doCalc name (Mat m) ms
-                                       where m = getMat s ms
---doCalcTerm name (LTerm Mul lhs rhs) ms = doCalc name (Mat m) ms
---                                         where m = matNMul lhs (getMat rhs ms) 
+doCalcTerm name (LongTerm (EvaledMat s) []) ms = doCalc name (Mat s) ms
+doCalcTerm name (LongTerm (SingleMat s) []) ms = doCalc name (Mat m) ms
+                                                 where m = getMat s ms
+doCalcTerm name (LongTerm (SingleMat s) [OpSetMat (op,m)]) ms = doCalcTerm name (LongTerm (EvaledMat t) []) ms
+                                                       where t = matMul (getMat s ms) (getMat m ms)
+doCalcTerm name (LongTerm (SingleMat s) (OpSetMat (op,m):es)) ms = doCalcTerm name (LongTerm (EvaledMat t) es) ms
+                                                       where t = matMul (getMat s ms) (getMat m ms)
+doCalcTerm name (LongTerm (EvaledMat s) (OpSetMat (op,m):es)) ms = doCalcTerm name (LongTerm (EvaledMat t) es) ms
+                                                       where t = matMul s (getMat m ms)
+doCalcTerm name (LongTermN d [OpSetMat (op,m)]) ms = doCalcTerm name (LongTerm (EvaledMat t) []) ms
+                                                       where t = matNMul d (getMat m ms)
+doCalcTerm name (LongTermN d (OpSetMat (op,m):es)) ms = doCalcTerm name (LongTerm (EvaledMat t) es) ms
+                                                       where t = matNMul d (getMat m ms)
+doCalcTerm name (LongTerm (SingleMat s) [OpSetNum (op,m)]) ms = doCalcTerm name (LongTerm (EvaledMat t) []) ms
+                                                       where t = matNMul m (getMat s ms)
 
 renameMat :: String -> NMat -> NMat
 renameMat new (NMat (n,m)) = NMat (new,m)
@@ -175,12 +186,27 @@ equation = do a <- many1 letter
               b <- calc
               return $ Equation a (SingleTerm b)
 
-singlemat = many1 letter >>= return . SingleMat
+calc = term
 
-term = do a <- many1 letter
-          char '*'
-          b <- many1 letter
-          return $ Term Mul a b
+term = try(longterm) <|> longtermn
+
+longterm = do a <- many1 letter
+              b <- many opset
+              return $ LongTerm (SingleMat a) b
+
+longtermn = do a <- try(parseDouble) <|> parseInt
+               b <- many opset
+               return $ LongTermN a b
+
+opset = try(opsetMat) <|> try(opsetNum)
+
+opsetMat = do char '*'
+              a <- many1 letter
+              return $ OpSetMat (Mul,a)
+
+opsetNum = do char '*'
+              a <- try(parseDouble) <|> parseInt
+              return $ OpSetNum (Mul,a)
 
 parseDouble = do x <- many1 digit
                  char '.'
@@ -189,15 +215,3 @@ parseDouble = do x <- many1 digit
 
 parseInt = do x <- many1 digit
               return $ (read x::Double)
-
-nterm = do a <- try(parseDouble) <|> parseInt
-           char '*'
-           b <- many1 letter
-           return $ NTerm Mul a b
-
-termn = do b <- many1 letter
-           char '*'
-           a <- try(parseDouble) <|> parseInt
-           return $ NTerm Mul a b
-
-calc = try(nterm) <|> try(termn) <|> try(term) <|> singlemat

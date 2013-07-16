@@ -111,6 +111,60 @@ ${com} "C=2*A" $tmp-in | ${com} "D=3*B" > $tmp-ans
 diff $tmp-ans $tmp-out
 ERROR_CHECK "TEST2.2 error"
 
+###########################################
+#TEST4: matrix * matrix * matrix * ...
+
+cat << FIN > $tmp-in
+A 1 2 3
+A 1 2 3
+B -1
+B 1
+B 1
+C 2 3
+FIN
+
+cat << FIN > $tmp-out
+A 1 2 3
+A 1 2 3
+B -1
+B 1
+B 1
+C 2 3
+D 20.0 40.0 60.0
+D 20.0 40.0 60.0
+FIN
+
+${com} "D=A*B*C*A" $tmp-in > $tmp-ans
+diff $tmp-ans $tmp-out
+ERROR_CHECK "TEST3.1 error"
+
+###########################################
+#TEST5: num * matrix * matrix * ...
+
+cat << FIN > $tmp-in
+A 1 2 3
+A 1 2 3
+B -1
+B 1
+B 1
+C 2 3
+FIN
+
+cat << FIN > $tmp-out
+A 1 2 3
+A 1 2 3
+B -1
+B 1
+B 1
+C 2 3
+D 40.0 80.0 120.0
+D 40.0 80.0 120.0
+FIN
+
+${com} "D=2*A*B*C*A" $tmp-in > $tmp-ans
+diff $tmp-ans $tmp-out
+ERROR_CHECK "TEST3.1 error"
+
 rm -f $tmp-*
 echo "${com}" OK
 exit 0
