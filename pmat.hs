@@ -35,11 +35,10 @@ THE SOFTWARE.
 showUsage :: IO ()
 showUsage = do hPutStr stderr
 		("Usage    : pmat <opt> <file>\n" ++ 
-		"Tue Jul 16 21:21:55 JST 2013\n")
+		"Wed Jul 17 18:42:03 JST 2013\n")
 
 version :: IO ()
-version = do hPutStr stderr
-		("version 0.0015")
+version = do hPutStr stderr ("version 0.0016")
 
 main :: IO ()
 main = do
@@ -72,17 +71,15 @@ data Option = Equation String Calc
 data Calc = SingleTerm Term
             | Mat NMat
 
-data OpSet = OpSetMat (Op1,String)
-           | OpSetNum (Op1,Double)
+data Op = MulM String
+           | MulN Double
+           | PowN Int
 
 data SingleMat = SingleMat String
                | EvaledMat NMat
 
-data Term = LongTerm SingleMat [OpSet]
-          | LongTermN Double [OpSet]
-
-data Mat = Maybe NMat
-data Op1 = Mul
+data Term = LongTerm SingleMat [Op]
+          | LongTermN Double [Op]
 
 --------------------------
 -- execution and output --
@@ -100,17 +97,17 @@ doCalcTerm :: String -> Term -> [NMat] -> IO ()
 doCalcTerm name (LongTerm (EvaledMat s) []) ms = doCalc name (Mat s) ms
 doCalcTerm name (LongTerm (SingleMat s) []) ms = doCalc name (Mat m) ms
                                                  where m = getMat s ms
-doCalcTerm name (LongTerm (SingleMat s) [OpSetMat (op,m)]) ms = doCalcTerm name (LongTerm (EvaledMat t) []) ms
+doCalcTerm name (LongTerm (SingleMat s) [MulM m]) ms = doCalcTerm name (LongTerm (EvaledMat t) []) ms
                                                        where t = matMul (getMat s ms) (getMat m ms)
-doCalcTerm name (LongTerm (SingleMat s) (OpSetMat (op,m):es)) ms = doCalcTerm name (LongTerm (EvaledMat t) es) ms
+doCalcTerm name (LongTerm (SingleMat s) ((MulM m):es)) ms = doCalcTerm name (LongTerm (EvaledMat t) es) ms
                                                        where t = matMul (getMat s ms) (getMat m ms)
-doCalcTerm name (LongTerm (EvaledMat s) (OpSetMat (op,m):es)) ms = doCalcTerm name (LongTerm (EvaledMat t) es) ms
+doCalcTerm name (LongTerm (EvaledMat s) ((MulM m):es)) ms = doCalcTerm name (LongTerm (EvaledMat t) es) ms
                                                        where t = matMul s (getMat m ms)
-doCalcTerm name (LongTermN d [OpSetMat (op,m)]) ms = doCalcTerm name (LongTerm (EvaledMat t) []) ms
+doCalcTerm name (LongTermN d [MulM m]) ms = doCalcTerm name (LongTerm (EvaledMat t) []) ms
                                                        where t = matNMul d (getMat m ms)
-doCalcTerm name (LongTermN d (OpSetMat (op,m):es)) ms = doCalcTerm name (LongTerm (EvaledMat t) es) ms
+doCalcTerm name (LongTermN d ((MulM m):es)) ms = doCalcTerm name (LongTerm (EvaledMat t) es) ms
                                                        where t = matNMul d (getMat m ms)
-doCalcTerm name (LongTerm (SingleMat s) [OpSetNum (op,m)]) ms = doCalcTerm name (LongTerm (EvaledMat t) []) ms
+doCalcTerm name (LongTerm (SingleMat s) [MulN m]) ms = doCalcTerm name (LongTerm (EvaledMat t) []) ms
                                                        where t = matNMul m (getMat s ms)
 
 renameMat :: String -> NMat -> NMat
@@ -191,22 +188,18 @@ calc = term
 term = try(longterm) <|> longtermn
 
 longterm = do a <- many1 letter
-              b <- many opset
+              b <- many op
               return $ LongTerm (SingleMat a) b
 
 longtermn = do a <- try(parseDouble) <|> parseInt
-               b <- many opset
+               b <- many op
                return $ LongTermN a b
 
-opset = try(opsetMat) <|> try(opsetNum)
+op = try(opMat) <|> try(opNum) <|> try(opInv)
 
-opsetMat = do char '*'
-              a <- many1 letter
-              return $ OpSetMat (Mul,a)
-
-opsetNum = do char '*'
-              a <- try(parseDouble) <|> parseInt
-              return $ OpSetNum (Mul,a)
+opInv = string "^-1" >> (return $ PowN (-1))
+opMat = char '*' >> many1 letter >>= return . MulM
+opNum = char '*' >> (try(parseDouble) <|> parseInt) >>= return . MulN
 
 parseDouble = do x <- many1 digit
                  char '.'
