@@ -39,7 +39,7 @@ showUsage = do hPutStr stderr
 		"Thu Jul 18 17:24:55 JST 2013\n")
 
 version :: IO ()
-version = do hPutStr stderr ("version 0.0016")
+version = do hPutStr stderr ("version 0.0017")
 
 main :: IO ()
 main = do
