@@ -1,11 +1,12 @@
 import System.Environment
 import System.IO
+import Control.Applicative hiding ((<|>), many)
 import Text.ParserCombinators.Parsec
 import Control.Monad
 import Numeric.LinearAlgebra
 
 {--
-pmat
+pmat: pipe oriented matrix calculator
 
 written by Ryuichi Ueda
 
@@ -35,7 +36,7 @@ THE SOFTWARE.
 showUsage :: IO ()
 showUsage = do hPutStr stderr
 		("Usage    : pmat <opt> <file>\n" ++ 
-		"Wed Jul 17 18:42:03 JST 2013\n")
+		"Thu Jul 18 17:24:55 JST 2013\n")
 
 version :: IO ()
 version = do hPutStr stderr ("version 0.0016")
@@ -44,6 +45,7 @@ main :: IO ()
 main = do
 	args <- getArgs
 	case args of
+		[]         -> showUsage
 		["-h"]     -> showUsage
 		["--help"] -> showUsage
 		["--ver"]  -> version
@@ -56,8 +58,7 @@ readData "-" = getContents
 readData f   = readFile f
 
 mainProc :: String -> String -> IO ()
-mainProc opt cs = do putStr cs
-                     mainProc' (setOpt opt) (setMatrices cs)
+mainProc opt cs = putStr cs >> mainProc' (setOpt opt) (setMatrices cs)
 
 ---------------
 -- data type --
@@ -97,18 +98,17 @@ doCalcTerm :: String -> Term -> [NMat] -> IO ()
 doCalcTerm name (LongTerm (EvaledMat s) []) ms = doCalc name (Mat s) ms
 doCalcTerm name (LongTerm (SingleMat s) []) ms = doCalc name (Mat m) ms
                                                  where m = getMat s ms
-doCalcTerm name (LongTerm (SingleMat s) [MulM m]) ms = doCalcTerm name (LongTerm (EvaledMat t) []) ms
-                                                       where t = matMul (getMat s ms) (getMat m ms)
 doCalcTerm name (LongTerm (SingleMat s) ((MulM m):es)) ms = doCalcTerm name (LongTerm (EvaledMat t) es) ms
                                                        where t = matMul (getMat s ms) (getMat m ms)
+doCalcTerm name (LongTerm (SingleMat s) ((MulN m):es)) ms = doCalcTerm name (LongTerm (EvaledMat t) es) ms
+                                                       where t = matNMul m (getMat s ms)
 doCalcTerm name (LongTerm (EvaledMat s) ((MulM m):es)) ms = doCalcTerm name (LongTerm (EvaledMat t) es) ms
                                                        where t = matMul s (getMat m ms)
-doCalcTerm name (LongTermN d [MulM m]) ms = doCalcTerm name (LongTerm (EvaledMat t) []) ms
+doCalcTerm name (LongTerm (EvaledMat s) ((MulN m):es)) ms = doCalcTerm name (LongTerm (EvaledMat t) es) ms
+                                                       where t = matNMul m s
+doCalcTerm name (LongTermN d            ((MulM m):es)) ms = doCalcTerm name (LongTerm (EvaledMat t) es) ms
                                                        where t = matNMul d (getMat m ms)
-doCalcTerm name (LongTermN d ((MulM m):es)) ms = doCalcTerm name (LongTerm (EvaledMat t) es) ms
-                                                       where t = matNMul d (getMat m ms)
-doCalcTerm name (LongTerm (SingleMat s) [MulN m]) ms = doCalcTerm name (LongTerm (EvaledMat t) []) ms
-                                                       where t = matNMul m (getMat s ms)
+doCalcTerm name (LongTermN d            ((MulN m):es)) ms = doCalcTerm name (LongTermN (d*m) es) ms
 
 renameMat :: String -> NMat -> NMat
 renameMat new (NMat (n,m)) = NMat (new,m)
@@ -173,31 +173,24 @@ setOpt str = case parse parseOption "" str of
                                   Right opt -> opt
                                   Left err -> Error ( show err )
 
-parseOption = try(equation) 
-              <|> do c <- calc
-                     return $ Equation "" (SingleTerm c)
-              <?> "no terms"
+parseOption = try(equation) <|> try(onlyrhs) <?> "no terms"
 
 equation = do a <- many1 letter
               char '='
-              b <- calc
-              return $ Equation a (SingleTerm b)
+              Equation a <$> (SingleTerm <$> calc)
+
+onlyrhs = Equation "" <$> (SingleTerm <$> calc)
 
 calc = term
 
 term = try(longterm) <|> longtermn
 
-longterm = do a <- many1 letter
-              b <- many op
-              return $ LongTerm (SingleMat a) b
-
-longtermn = do a <- try(parseDouble) <|> parseInt
-               b <- many op
-               return $ LongTermN a b
+longterm = LongTerm <$> (SingleMat <$> many1 letter) <*> many op
+longtermn = LongTermN <$> (try(parseDouble) <|> parseInt) <*> many op
 
 op = try(opMat) <|> try(opNum) <|> try(opInv)
 
-opInv = string "^-1" >> (return $ PowN (-1))
+opInv = string "^-1" >> (return . PowN) (-1)
 opMat = char '*' >> many1 letter >>= return . MulM
 opNum = char '*' >> (try(parseDouble) <|> parseInt) >>= return . MulN
 
