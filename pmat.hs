@@ -36,7 +36,7 @@ THE SOFTWARE.
 showUsage :: IO ()
 showUsage = do hPutStr stderr
 		("Usage    : pmat <opt> <file>\n" ++ 
-		"Fri Jul 19 13:06:52 JST 2013\n")
+		"Fri Jul 19 23:42:50 JST 2013\n")
 
 version :: IO ()
 version = do hPutStr stderr ("version 0.0020")
@@ -72,7 +72,7 @@ data Option = Equation String Calc
 data Calc = Terms Term [Op2]
           | Mat NMat
 
-data Term = LongTerm SingleMat [Op]
+data Term = LongTerm StringMat [Op]
           | LongTermN Double [Op]
 
 data Op = MulM String
@@ -82,7 +82,7 @@ data Op = MulM String
 data Op2 = OpMinus Term
          | OpPlus Term
 
-data SingleMat = SingleMat String
+data StringMat = StringMat String
                | EvaledMat NMat
 
 --------------------------
@@ -90,55 +90,54 @@ data SingleMat = SingleMat String
 --------------------------
 
 mainProc' :: Option -> [NMat] -> IO ()
-mainProc' (Equation name calc) ms = doCalc name calc ms
+mainProc' (Equation ""   (Mat n)) ms = putStr . toStr $ n
+mainProc' (Equation name (Mat n)) ms = putStr . toStr $ renameMat name n
+                                       where renameMat new (NMat (x,m)) = NMat (new,m)
+mainProc' (Equation name calc) ms = mainProc' (Equation name c ) ms
+                                    where c = execCalc name calc ms
 
-doCalc :: String -> Calc -> [NMat] -> IO ()
-doCalc name (Terms t ts) ms = doCalc' name t ts ms
-doCalc name (Mat m)      _  = doCalc'' name m
+execCalc :: String -> Calc -> [NMat] -> Calc
+execCalc name (Terms (LongTerm (EvaledMat m) []) []) ms = Mat m
+execCalc name (Terms t [])       ms = Terms (evalTerm name t ms) []
+execCalc name (Terms t (op:ops)) ms = execCalc name (Terms x ops) ms
+                        where x = conTerms name y op ms
+                              y = evalTerm name t ms
 
-doCalc' name t []     ms = calcTerm name t ms
-doCalc' name t (r:rs) ms = doCalc name (Terms a rs) ms
-                           where a = conTerms t r ms
+conTerms :: String -> Term -> Op2 -> [NMat] -> Term
+conTerms _    x (OpMinus (LongTerm (EvaledMat n) [])) _ = LongTerm (EvaledMat $ matMinus (getM x) n) []
+conTerms _    x (OpPlus  (LongTerm (EvaledMat n) [])) _ = LongTerm (EvaledMat $ matPlus (getM x) n) []
+conTerms name x (OpMinus y)                          ms = conTerms name x (OpMinus $ evalTerm name y ms) ms
+conTerms name x (OpPlus y)                           ms = conTerms name x (OpPlus $ evalTerm name y ms) ms
 
-doCalc'' ""   = putStr . toStr
-doCalc'' name = putStr . toStr . ( renameMat name )
-		where renameMat new (NMat (n,m)) = NMat (new,m)
+getM :: Term -> NMat
+getM (LongTerm (EvaledMat m) []) = m
 
-calcTerm :: String -> Term -> [NMat] -> IO ()
-calcTerm name (LongTerm  m ops) ms = calcTerm'  name m ops ms
-calcTerm name (LongTermN d ops) ms = calcTerm'' name d ops ms
+evalTerm :: String -> Term -> [NMat] -> Term
+evalTerm name (LongTerm m ops)  ms = evalTerm' name m ops ms
+evalTerm name (LongTermN d ops) ms = evalTerm''' name d ops ms
 
-calcTerm' :: String -> SingleMat -> [Op] -> [NMat] -> IO ()
-calcTerm' name (SingleMat s) ops ms = calcTerm name t ms
-                                                 where t = LongTerm (EvaledMat $ getMat s ms) ops
-calcTerm' name (EvaledMat s) ops ms = f name s ops ms
- where f name s [] ms = doCalc name (Mat s) ms
-       f name s ((MulM m):es) ms = calcTerm name (LongTerm (EvaledMat t) es) ms
-                                                      where t = matMul s (getMat m ms)
-       f name s ((MulN m):es) ms = calcTerm name (LongTerm (EvaledMat t) es) ms
-                                                      where t = matNMul m s
+evalTerm' :: String -> StringMat -> [Op] -> [NMat] -> Term
+evalTerm' name (EvaledMat e) ops ms = evalTerm'' name e ops ms
+evalTerm' name (StringMat s) ops ms = evalTerm' name e ops ms
+    where e = EvaledMat (getMat s ms)
 
-calcTerm'' name d ((MulM m):ops) ms = calcTerm name (LongTerm (EvaledMat t) ops) ms
-                                                       where t = matNMul d (getMat m ms)
-calcTerm'' name d ((MulN m):ops) ms = calcTerm name (LongTermN (d*m) ops) ms
+evalTerm'' :: String -> NMat -> [Op] -> [NMat] -> Term
+evalTerm'' name e [] ms = LongTerm (EvaledMat e) []
+evalTerm'' name e (op:ops) ms = evalTerm'' name (conMat e op ms) ops ms 
 
+evalTerm''' :: String -> Double -> [Op] -> [NMat] -> Term
+evalTerm''' name d [] ms = LongTermN d []
+evalTerm''' name d (op:ops) ms = evalTerm name x ms
+     where x = conN d op ops ms
 
-{--
-data Op2 = OpMinus Term
-         | OpPlus Term
-conTerms2 :: Term -> Op2 -> [NMat] -> Term
-conTerms2 lhs (OpMinus rhs) ms = lhs
---}
+conMat :: NMat -> Op -> [NMat] -> NMat
+conMat m (MulM s) ms = matMul m (getMat s ms)
+conMat m (MulN d) ms = matNMul d m 
 
-conTerms :: Term -> Op2 -> [NMat] -> Term
-conTerms (LongTerm (SingleMat e) []) (OpPlus (LongTerm (SingleMat s) [])) ms = LongTerm (EvaledMat $ matPlus f g) []
-   where f = getMat e ms
-         g = getMat s ms
-conTerms (LongTerm (EvaledMat e) []) (OpPlus (LongTerm (EvaledMat s) [])) _ = LongTerm (EvaledMat $ matPlus e s) []
-conTerms (LongTerm (SingleMat e) []) (OpMinus (LongTerm (SingleMat s) [])) ms = LongTerm (EvaledMat $ matMinus f g) []
-   where f = getMat e ms
-         g = getMat s ms
-conTerms (LongTerm (EvaledMat e) []) (OpMinus (LongTerm (EvaledMat s) [])) _ = LongTerm (EvaledMat $ matMinus e s) []
+conN :: Double -> Op -> [Op] -> [NMat] -> Term
+conN d (MulM s) ops ms = LongTerm (EvaledMat m) ops 
+   where m = matNMul d (getMat s ms)
+conN d (MulN f) ops ms = LongTermN (d*f) ops 
 
 ---------------------
 -- matrix handling --
@@ -220,7 +219,7 @@ opMinus = char '-' >> OpMinus <$> term
 
 term = try(longterm) <|> longtermn
 
-longterm = LongTerm <$> (SingleMat <$> many1 letter) <*> many op
+longterm = LongTerm <$> (StringMat <$> many1 letter) <*> many op
 longtermn = LongTermN <$> (try(parseDouble) <|> parseInt) <*> many op
 
 op = try(opMat) <|> try(opNum) <|> try(opInv)

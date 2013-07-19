@@ -184,6 +184,10 @@ D 39.0 78.0 117.0
 D 39.0 78.0 117.0
 FIN
 
+${com} "D=B-A" $tmp-in > $tmp-ans
+diff $tmp-ans $tmp-out-m
+ERROR_CHECK "TEST6.1 error"
+
 cat << FIN > $tmp-out-p
 A 1 2 3
 A 1 2 3
@@ -193,13 +197,35 @@ D 41.0 82.0 123.0
 D 41.0 82.0 123.0
 FIN
 
-${com} "D=B-A" $tmp-in > $tmp-ans
-diff $tmp-ans $tmp-out-m
-ERROR_CHECK "TEST6.1 error"
-
 ${com} "D=B+A" $tmp-in > $tmp-ans
 diff $tmp-ans $tmp-out-p
 ERROR_CHECK "TEST6.2 error"
+
+cat << FIN > $tmp-out-pp
+A 1 2 3
+A 1 2 3
+B 40.0 80.0 120.0
+B 40.0 80.0 120.0
+D 42.0 84.0 126.0
+D 42.0 84.0 126.0
+FIN
+
+${com} "D=B+A+A" $tmp-in > $tmp-ans
+diff $tmp-ans $tmp-out-pp
+ERROR_CHECK "TEST6.3 error"
+
+cat << FIN > $tmp-out-ppp
+A 1 2 3
+A 1 2 3
+B 40.0 80.0 120.0
+B 40.0 80.0 120.0
+D 43.0 86.0 129.0
+D 43.0 86.0 129.0
+FIN
+
+${com} "D=B+2*A+A" $tmp-in > $tmp-ans
+diff $tmp-ans $tmp-out-ppp
+ERROR_CHECK "TEST6.4 error"
 
 rm -f $tmp-*
 echo "${com}" OK
