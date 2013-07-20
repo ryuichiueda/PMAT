@@ -227,6 +227,47 @@ ${com} "D=B+2*A+A" $tmp-in > $tmp-ans
 diff $tmp-ans $tmp-out-ppp
 ERROR_CHECK "TEST6.4 error"
 
+###########################################
+#TEST7: inv
+
+cat << FIN > $tmp-in
+A 1 2 3
+A 1 2.1 3
+A 1.9 2 3
+FIN
+
+cat << FIN > $tmp-out-m
+A 1 2 3
+A 1 2.1 3
+A 1.9 2 3
+B -1.1111111111111127 1.8698493046318425e-15 1.111111111111111
+B -9.999999999999996 9.999999999999996 -1.0600119330591946e-16
+B 7.3703703703703685 -6.666666666666665 -0.37037037037037024
+FIN
+
+${com} "B=A^-1" $tmp-in > $tmp-ans
+diff $tmp-ans $tmp-out-m
+ERROR_CHECK "TEST7.1 error"
+
+cat << FIN > $tmp-in
+A 1 2 1
+A 2 1 0
+A 1 1 2
+FIN
+
+cat << FIN > $tmp-out-m
+A 1 2 1
+A 2 1 0
+A 1 1 2
+B -1.4 -1.4 -0.8
+B -1.2000000000000002 -1.2 -0.39999999999999997
+B -1.2 -1.2 -1.4
+FIN
+
+${com} "B=A+A^-1-A*2" $tmp-in > $tmp-ans
+diff $tmp-ans $tmp-out-m
+ERROR_CHECK "TEST7.2 error"
+
 rm -f $tmp-*
 echo "${com}" OK
 exit 0

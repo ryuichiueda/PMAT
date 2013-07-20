@@ -36,10 +36,10 @@ THE SOFTWARE.
 showUsage :: IO ()
 showUsage = do hPutStr stderr
 		("Usage    : pmat <opt> <file>\n" ++ 
-		"Sat Jul 20 14:39:58 JST 2013\n")
+		"Sat Jul 20 15:03:25 JST 2013\n")
 
 version :: IO ()
-version = do hPutStr stderr ("version 0.0023")
+version = do hPutStr stderr ("version 0.01")
 
 main :: IO ()
 main = do args <- getArgs
@@ -117,6 +117,9 @@ evalTerm (TermS s ops)      ms = evalTerm (TermE (getMat s ms) ops) ms
 matMul :: NMat -> Op -> [NMat] -> NMat
 matMul m (MulM s) ms = m .* (getMat s ms)
 matMul m (MulN d) ms = d *. m 
+matMul m (PowN (-1)) ms = iv m 
+
+iv (NMat x) = NMat ((fst x) ++ "^-1", inv (snd x))
 
 ---------------------
 -- matrix handling --
