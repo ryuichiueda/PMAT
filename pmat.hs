@@ -36,10 +36,10 @@ THE SOFTWARE.
 showUsage :: IO ()
 showUsage = do hPutStr stderr
 		("Usage    : pmat <opt> <file>\n" ++ 
-		"Sat Jul 20 00:23:59 JST 2013\n")
+		"Sat Jul 20 12:54:37 JST 2013\n")
 
 version :: IO ()
-version = do hPutStr stderr ("version 0.0021")
+version = do hPutStr stderr ("version 0.0022")
 
 main :: IO ()
 main = do
@@ -72,8 +72,9 @@ data Option = Eq String Calc
 data Calc = Terms Term [Op2]
           | AnsM NMat
 
-data Term = TermM Mat [Op]
+data Term = TermS String [Op]
           | TermN Double [Op]
+          | TermE NMat [Op]
 
 data Op = MulM String
         | MulN Double
@@ -81,9 +82,6 @@ data Op = MulM String
 
 data Op2 = OpMinus Term
          | OpPlus Term
-
-data Mat = MatS String
-         | MatE NMat
 
 --------------------------
 -- execution and output --
@@ -93,41 +91,34 @@ mainProc' :: Option -> [NMat] -> IO ()
 mainProc' (Eq ""   (AnsM n)) ms = putStr . toStr $ n
 mainProc' (Eq name (AnsM n)) ms = putStr . toStr $ renameMat name n
                                     where renameMat new (NMat (x,m)) = NMat (new,m)
-mainProc' (Eq name calc) ms = mainProc' (Eq name c ) ms
+mainProc' (Eq name calc)     ms = mainProc' (Eq name c ) ms
                                     where c = execCalc calc ms
 
 execCalc :: Calc -> [NMat] -> Calc
-execCalc (Terms (TermM (MatE m) []) []) ms = AnsM m
+execCalc (Terms (TermE m []) []) ms = AnsM m
 execCalc (Terms t [])       ms = Terms (evalTerm t ms) []
 execCalc (Terms t (op:ops)) ms = execCalc (Terms x ops) ms
                         where x = conTerms y op ms
                               y = evalTerm t ms
 
 conTerms :: Term -> Op2 -> [NMat] -> Term
-conTerms x (OpMinus (TermM (MatE n) [])) _ = TermM (MatE $ matMinus (getM x) n) []
-conTerms x (OpPlus  (TermM (MatE n) [])) _ = TermM (MatE $ matPlus (getM x) n) []
-conTerms x (OpMinus y)                  ms = conTerms x (OpMinus $ evalTerm y ms) ms
-conTerms x (OpPlus y)                   ms = conTerms x (OpPlus $ evalTerm y ms) ms
+conTerms x (OpMinus (TermE n [])) _ = TermE (matMinus (getM x) n) []
+conTerms x (OpPlus  (TermE n [])) _ = TermE (matPlus (getM x) n) []
+conTerms x (OpMinus y)           ms = conTerms x (OpMinus $ evalTerm y ms) ms
+conTerms x (OpPlus y)            ms = conTerms x (OpPlus $ evalTerm y ms) ms
 
 getM :: Term -> NMat
-getM (TermM (MatE m) []) = m
+getM (TermE m []) = m
 
 evalTerm :: Term -> [NMat] -> Term
-evalTerm (TermM m ops) ms = evalTerm' m ops ms
-evalTerm (TermN d ops) ms = evalTerm''' d ops ms
+evalTerm (TermE e []) ms = TermE e []
+evalTerm (TermN n []) ms = TermN n []
+evalTerm (TermE e (op:ops)) ms = evalTerm (TermE (conMat e op ms) ops) ms 
+evalTerm (TermN d ops) ms = evalTerm' d ops ms
+evalTerm (TermS s ops) ms = evalTerm (TermE (getMat s ms) ops) ms
 
-evalTerm' :: Mat -> [Op] -> [NMat] -> Term
-evalTerm' (MatE e) ops ms = evalTerm'' e ops ms
-evalTerm' (MatS s) ops ms = evalTerm' e ops ms
-    where e = MatE (getMat s ms)
-
-evalTerm'' :: NMat -> [Op] -> [NMat] -> Term
-evalTerm'' e [] ms = TermM (MatE e) []
-evalTerm'' e (op:ops) ms = evalTerm'' (conMat e op ms) ops ms 
-
-evalTerm''' :: Double -> [Op] -> [NMat] -> Term
-evalTerm''' d [] ms = TermN d []
-evalTerm''' d (op:ops) ms = evalTerm x ms
+evalTerm' :: Double -> [Op] -> [NMat] -> Term
+evalTerm' d (op:ops) ms = evalTerm x ms
      where x = conN d op ops ms
 
 conMat :: NMat -> Op -> [NMat] -> NMat
@@ -135,7 +126,7 @@ conMat m (MulM s) ms = matMul m (getMat s ms)
 conMat m (MulN d) ms = matNMul d m 
 
 conN :: Double -> Op -> [Op] -> [NMat] -> Term
-conN d (MulM s) ops ms = TermM (MatE m) ops 
+conN d (MulM s) ops ms = TermE m ops 
    where m = matNMul d (getMat s ms)
 conN d (MulN f) ops ms = TermN (d*f) ops 
 
@@ -219,7 +210,7 @@ opMinus = char '-' >> OpMinus <$> term
 
 term = try(longterm) <|> longtermn
 
-longterm = TermM <$> (MatS <$> many1 letter) <*> many op
+longterm = TermS <$> (many1 letter) <*> many op
 longtermn = TermN <$> (try(parseDouble) <|> parseInt) <*> many op
 
 op = try(opMat) <|> try(opNum) <|> try(opInv)
