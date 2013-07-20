@@ -268,6 +268,31 @@ ${com} "B=A+A^-1-A*2" $tmp-in > $tmp-ans
 diff $tmp-ans $tmp-out-m
 ERROR_CHECK "TEST7.2 error"
 
+###########################################
+#TEST8: pow
+
+cat << FIN > $tmp-in
+A 1 2 1
+A 2 1 0 
+A 1 1 2
+FIN
+
+cat << FIN > $tmp-out-m
+A 1 2 1
+A 2 1 0 
+A 1 1 2
+B 6.0 5.0 3.0
+B 4.0 5.0 2.0
+B 5.0 5.0 5.0
+C 0.0 0.0 0.0
+C 0.0 0.0 0.0
+C 0.0 0.0 0.0
+FIN
+
+${com} "B=A^2" $tmp-in | ${com} "C=B^2-A^4" > $tmp-ans
+diff $tmp-ans $tmp-out-m
+ERROR_CHECK "TEST8.1 error"
+
 rm -f $tmp-*
 echo "${com}" OK
 exit 0

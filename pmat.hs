@@ -36,10 +36,10 @@ THE SOFTWARE.
 showUsage :: IO ()
 showUsage = do hPutStr stderr
 		("Usage    : pmat <opt> <file>\n" ++ 
-		"Sat Jul 20 15:03:25 JST 2013\n")
+		"Sat Jul 20 15:38:35 JST 2013\n")
 
 version :: IO ()
-version = do hPutStr stderr ("version 0.01")
+version = do hPutStr stderr ("version 0.02")
 
 main :: IO ()
 main = do args <- getArgs
@@ -106,8 +106,8 @@ matAdd x (OpPlus y)            ms = matAdd x (OpPlus $ evalTerm y ms) ms
 getM (TermE m []) = m
 
 evalTerm :: Term -> [NMat] -> Term
-evalTerm (TermE e []) ms = TermE e []
-evalTerm (TermN n []) ms = TermN n []
+evalTerm (TermE e []) _  = TermE e []
+evalTerm (TermN n []) _  = TermN n []
 evalTerm (TermE e (op:ops)) ms = evalTerm (TermE (matMul e op ms) ops) ms 
 evalTerm (TermN d (op:ops)) ms = evalTerm (f d op ops ms) ms
  where f d (MulM s) ops ms = TermE (d *. (getMat s ms)) ops 
@@ -115,11 +115,12 @@ evalTerm (TermN d (op:ops)) ms = evalTerm (f d op ops ms) ms
 evalTerm (TermS s ops)      ms = evalTerm (TermE (getMat s ms) ops) ms
 
 matMul :: NMat -> Op -> [NMat] -> NMat
-matMul m (MulM s) ms = m .* (getMat s ms)
-matMul m (MulN d) ms = d *. m 
-matMul m (PowN (-1)) ms = iv m 
-
-iv (NMat x) = NMat ((fst x) ++ "^-1", inv (snd x))
+matMul m        (MulM s)   ms = m .* (getMat s ms)
+matMul m        (MulN d)    _ = d *. m 
+matMul (NMat x) (PowN (-1)) _ = NMat ((fst x) ++ "^-1", inv (snd x))
+matMul (NMat x) (PowN m) _    = NMat ((fst x) ++ "^" ++ (show m), f (snd x) m)
+                                where f x 1 = x
+                                      f x m = x <> (f x (m-1))
 
 ---------------------
 -- matrix handling --
@@ -195,9 +196,13 @@ term = try(longterm) <|> longtermn
 longterm = TermS <$> (many1 letter) <*> many op
 longtermn = TermN <$> (try(parseDouble) <|> parseInt) <*> many op
 
-op = try(opMat) <|> try(opNum) <|> try(opInv)
+op = try(opMat) <|> try(opNum) <|> try(opInv) <|> try(opPow)
 
 opInv = string "^-1" >> (return . PowN) (-1)
+opPow = do char '^'
+           a <- many1 digit
+           return $ PowN (read a::Int )
+
 opMat = char '*' >> many1 letter >>= return . MulM
 opNum = char '*' >> (try(parseDouble) <|> parseInt) >>= return . MulN
 
