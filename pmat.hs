@@ -36,15 +36,14 @@ THE SOFTWARE.
 showUsage :: IO ()
 showUsage = do hPutStr stderr
 		("Usage    : pmat <opt> <file>\n" ++ 
-		"Sat Jul 20 12:54:37 JST 2013\n")
+		"Sat Jul 20 14:39:58 JST 2013\n")
 
 version :: IO ()
-version = do hPutStr stderr ("version 0.0022")
+version = do hPutStr stderr ("version 0.0023")
 
 main :: IO ()
-main = do
-	args <- getArgs
-	case args of
+main = do args <- getArgs
+	  case args of
 		[]         -> showUsage
 		["-h"]     -> showUsage
 		["--help"] -> showUsage
@@ -56,9 +55,6 @@ main = do
 readData :: String -> IO String
 readData "-" = getContents
 readData f   = readFile f
-
-mainProc :: String -> String -> IO ()
-mainProc opt cs = putStr cs >> mainProc' (setOpt opt) (setMatrices cs)
 
 ---------------
 -- data type --
@@ -86,49 +82,41 @@ data Op2 = OpMinus Term
 --------------------------
 -- execution and output --
 --------------------------
+mainProc :: String -> String -> IO ()
+mainProc opt cs = putStr cs >> mainProc' (setOpt opt) (setMatrices cs)
 
 mainProc' :: Option -> [NMat] -> IO ()
-mainProc' (Eq ""   (AnsM n)) ms = putStr . toStr $ n
-mainProc' (Eq name (AnsM n)) ms = putStr . toStr $ renameMat name n
-                                    where renameMat new (NMat (x,m)) = NMat (new,m)
-mainProc' (Eq name calc)     ms = mainProc' (Eq name c ) ms
-                                    where c = execCalc calc ms
+mainProc' (Eq ""   (AnsM n))            _ = putStr . toStr $ n
+mainProc' (Eq name (AnsM (NMat (_,m)))) _ = putStr . toStr $ NMat (name,m)
+mainProc' (Eq name calc)               ms = mainProc' (Eq name $ execCalc calc ms ) ms
 
 execCalc :: Calc -> [NMat] -> Calc
 execCalc (Terms (TermE m []) []) ms = AnsM m
 execCalc (Terms t [])       ms = Terms (evalTerm t ms) []
 execCalc (Terms t (op:ops)) ms = execCalc (Terms x ops) ms
-                        where x = conTerms y op ms
+                        where x = matAdd y op ms
                               y = evalTerm t ms
 
-conTerms :: Term -> Op2 -> [NMat] -> Term
-conTerms x (OpMinus (TermE n [])) _ = TermE (matMinus (getM x) n) []
-conTerms x (OpPlus  (TermE n [])) _ = TermE (matPlus (getM x) n) []
-conTerms x (OpMinus y)           ms = conTerms x (OpMinus $ evalTerm y ms) ms
-conTerms x (OpPlus y)            ms = conTerms x (OpPlus $ evalTerm y ms) ms
+matAdd :: Term -> Op2 -> [NMat] -> Term
+matAdd x (OpMinus (TermE n [])) _ = TermE ((getM x) .- n) []
+matAdd x (OpPlus  (TermE n [])) _ = TermE ((getM x) .+ n) []
+matAdd x (OpMinus y)           ms = matAdd x (OpMinus $ evalTerm y ms) ms
+matAdd x (OpPlus y)            ms = matAdd x (OpPlus $ evalTerm y ms) ms
 
-getM :: Term -> NMat
 getM (TermE m []) = m
 
 evalTerm :: Term -> [NMat] -> Term
 evalTerm (TermE e []) ms = TermE e []
 evalTerm (TermN n []) ms = TermN n []
-evalTerm (TermE e (op:ops)) ms = evalTerm (TermE (conMat e op ms) ops) ms 
-evalTerm (TermN d ops) ms = evalTerm' d ops ms
-evalTerm (TermS s ops) ms = evalTerm (TermE (getMat s ms) ops) ms
+evalTerm (TermE e (op:ops)) ms = evalTerm (TermE (matMul e op ms) ops) ms 
+evalTerm (TermN d (op:ops)) ms = evalTerm (f d op ops ms) ms
+ where f d (MulM s) ops ms = TermE (d *. (getMat s ms)) ops 
+       f d (MulN f) ops _  = TermN (d*f) ops 
+evalTerm (TermS s ops)      ms = evalTerm (TermE (getMat s ms) ops) ms
 
-evalTerm' :: Double -> [Op] -> [NMat] -> Term
-evalTerm' d (op:ops) ms = evalTerm x ms
-     where x = conN d op ops ms
-
-conMat :: NMat -> Op -> [NMat] -> NMat
-conMat m (MulM s) ms = matMul m (getMat s ms)
-conMat m (MulN d) ms = matNMul d m 
-
-conN :: Double -> Op -> [Op] -> [NMat] -> Term
-conN d (MulM s) ops ms = TermE m ops 
-   where m = matNMul d (getMat s ms)
-conN d (MulN f) ops ms = TermN (d*f) ops 
+matMul :: NMat -> Op -> [NMat] -> NMat
+matMul m (MulM s) ms = m .* (getMat s ms)
+matMul m (MulN d) ms = d *. m 
 
 ---------------------
 -- matrix handling --
@@ -139,25 +127,16 @@ getMat :: String -> [NMat] -> NMat
 getMat nm ms = head $ filter ( f nm ) ms
                  where f nm (NMat (n,_)) = (nm == n)
 
-matMul :: NMat -> NMat -> NMat
-matMul (NMat x) (NMat y) = NMat ((fst x) ++ "*" ++ (fst y),  (snd x) <> (snd y))
-
-matPlus :: NMat -> NMat -> NMat
-matPlus (NMat x) (NMat y) = NMat ((fst x) ++ "+" ++ (fst y),  (snd x) + (snd y))
-
-matMinus :: NMat -> NMat -> NMat
-matMinus (NMat x) (NMat y) = NMat ((fst x) ++ "-" ++ (fst y),  (snd x) - (snd y))
-
-matNMul :: Double -> NMat -> NMat
-matNMul d (NMat y) = NMat (nm, nMultiply d (snd y))
-                       where nm = (show d) ++ "*" ++ (fst y)
+(.*) (NMat x) (NMat y) = NMat ((fst x) ++ "*" ++ (fst y),  (snd x) <> (snd y))
+(.+) (NMat x) (NMat y) = NMat ((fst x) ++ "+" ++ (fst y),  (snd x) + (snd y))
+(.-) (NMat x) (NMat y) = NMat ((fst x) ++ "-" ++ (fst y),  (snd x) - (snd y))
 
 -- I can't use `*` for double-Matrix operation though I can it on ghci
-nMultiply :: Double -> Matrix Double -> Matrix Double
-nMultiply d m = ((r><r) arr) <> m
-                where r = rows m
-                      arr = [ f x d | x <- [0..(r*r-1)]] 
-                      f n d = if (n `mod` r) == ( n `div` r) then d else 0.0
+(*.)        d (NMat y) = NMat ((show d) ++ "*" ++ (fst y), d `ml` (snd y))
+                         where ml d m = ((r><r) arr) <> m
+                                      where r = rows m
+                                            arr = [ f x d | x <- [0..(r*r-1)]] 
+                                            f n d = if (n `mod` r) == ( n `div` r) then d else 0.0
 
 toStr :: NMat -> String
 toStr (NMat (name,mat)) = unlines [ name ++ " " ++ t | t <- tos ]
