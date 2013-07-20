@@ -36,10 +36,10 @@ THE SOFTWARE.
 showUsage :: IO ()
 showUsage = do hPutStr stderr
 		("Usage    : pmat <opt> <file>\n" ++ 
-		"Sat Jul 20 15:38:35 JST 2013\n")
+		"Sat Jul 20 17:08:55 JST 2013\n")
 
 version :: IO ()
-version = do hPutStr stderr ("version 0.02")
+version = do hPutStr stderr ("version 0.021")
 
 main :: IO ()
 main = do args <- getArgs
@@ -71,10 +71,14 @@ data Calc = Terms Term [Op2]
 data Term = TermS String [Op]
           | TermN Double [Op]
           | TermE NMat [Op]
+          | TermP Op0 [Op]
+
+data Op0 = Pow String Int
+         | PowE NMat Int
 
 data Op = MulM String
         | MulN Double
-        | PowN Int
+        | MulP Op0
 
 data Op2 = OpMinus Term
          | OpPlus Term
@@ -108,6 +112,7 @@ getM (TermE m []) = m
 evalTerm :: Term -> [NMat] -> Term
 evalTerm (TermE e []) _  = TermE e []
 evalTerm (TermN n []) _  = TermN n []
+evalTerm (TermP m ops) ms = evalTerm (TermE (pow m ms) ops) ms
 evalTerm (TermE e (op:ops)) ms = evalTerm (TermE (matMul e op ms) ops) ms 
 evalTerm (TermN d (op:ops)) ms = evalTerm (f d op ops ms) ms
  where f d (MulM s) ops ms = TermE (d *. (getMat s ms)) ops 
@@ -115,12 +120,17 @@ evalTerm (TermN d (op:ops)) ms = evalTerm (f d op ops ms) ms
 evalTerm (TermS s ops)      ms = evalTerm (TermE (getMat s ms) ops) ms
 
 matMul :: NMat -> Op -> [NMat] -> NMat
-matMul m        (MulM s)   ms = m .* (getMat s ms)
-matMul m        (MulN d)    _ = d *. m 
-matMul (NMat x) (PowN (-1)) _ = NMat ((fst x) ++ "^-1", inv (snd x))
-matMul (NMat x) (PowN m) _    = NMat ((fst x) ++ "^" ++ (show m), f (snd x) m)
-                                where f x 1 = x
-                                      f x m = x <> (f x (m-1))
+matMul m (MulM s)   ms = m .* (getMat s ms)
+matMul m (MulN d)    _ = d *. m 
+matMul m (MulP p)   ms = m .* (pow p ms)
+
+pow :: Op0 -> [NMat] -> NMat 
+pow (PowE (NMat (name,m)) (-1)) _ = NMat (name ++ "^-1", inv m)
+pow (PowE e 1)                  _ = e
+pow (PowE (NMat (name,m)) n)   ms = NMat (name ++ "^" ++ (show n),f m n)
+                                    where f m 1 = m
+                                          f m n = m <> (f m (n-1))
+pow (Pow  s n)                 ms = pow (PowE (getMat s ms) n) ms
 
 ---------------------
 -- matrix handling --
@@ -191,18 +201,23 @@ calc = Terms <$> term <*> (many (try(opPlus) <|> try(opMinus)) )
 opPlus = char '+' >> OpPlus <$> term
 opMinus = char '-' >> OpMinus <$> term
 
-term = try(longterm) <|> longtermn
+term = try(longtermp) <|> try(longterm) <|> longtermn
 
 longterm = TermS <$> (many1 letter) <*> many op
 longtermn = TermN <$> (try(parseDouble) <|> parseInt) <*> many op
+longtermp = TermP <$> (try(termPP) <|> termPI) <*> many op
 
-op = try(opMat) <|> try(opNum) <|> try(opInv) <|> try(opPow)
+op = try(opPow) <|> try(opMat) <|> try(opNum)
 
-opInv = string "^-1" >> (return . PowN) (-1)
-opPow = do char '^'
-           a <- many1 digit
-           return $ PowN (read a::Int )
+termPI = do a <- many1 letter
+            string "^-1"
+            return $ Pow a (-1)
+termPP = do a <- many1 letter
+            char '^'
+            b <- many1 digit
+            return $ Pow a (read b::Int)
 
+opPow = char '*' >> (try(termPI) <|> termPP)  >>= return . MulP
 opMat = char '*' >> many1 letter >>= return . MulM
 opNum = char '*' >> (try(parseDouble) <|> parseInt) >>= return . MulN
 
